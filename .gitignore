@@ -1,0 +1,21 @@
+# Local secrets and environments
+.env
+.env.*
+secrets.*
+.venv/
+
+# Python-generated files
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+build/
+dist/
+
+# Downloaded local speech models
+models/
+
+# Local private assistant data
+data/*.db
+data/*.db-*

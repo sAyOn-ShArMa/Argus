@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "argus-assistant"
+version = "0.14.0"
+description = "A free-first, provider-independent personal AI assistant core"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "groq>=0.31.0",
+    "pyttsx3>=2.98",
+    "sounddevice>=0.5.1",
+    "vosk>=0.3.45",
+    "opencv-contrib-python>=4.11,<5",
+    "mediapipe==0.10.21",
+    "pyserial>=3.5,<4",
+]
+
+[project.scripts]
+argus = "argus.cli:main"
+argus-dashboard = "argus.dashboard.app:main"
+
+[tool.setuptools.packages.find]
+include = ["argus*"]
