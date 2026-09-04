@@ -10,7 +10,7 @@ from threading import Event
 import time
 from typing import Any
 
-from argus.ai.factory import create_provider
+from argus.ai.factory import create_provider, resolve_api_key
 from argus.config import AppConfig, VisionConfig
 from argus.core import Agent
 from argus.memory import (
@@ -261,7 +261,8 @@ def create_dashboard_session(
     robotics_service: RoboticsService | None = None
     warnings: list[str] = []
     try:
-        provider = create_provider(config.ai, api_key=os.environ.get("GROQ_API_KEY"))
+        chat_api_key = resolve_api_key(config.ai)
+        provider = create_provider(config.ai, api_key=chat_api_key)
         memory_store = None
         if config.memory.enabled:
             if config.memory.database_path is None:
@@ -309,10 +310,13 @@ def create_dashboard_session(
 
         voice_factory = None
         if config.voice.enabled:
+            speech_api_key = os.environ.get("GROQ_API_KEY")
+            if not speech_api_key and config.ai.provider.casefold() == "groq":
+                speech_api_key = chat_api_key
             voice_factory = lambda stop_requested: create_silence_stopping_voice_session(
                 config.voice,
                 config.wake,
-                api_key=os.environ.get("GROQ_API_KEY"),
+                api_key=speech_api_key,
                 stop_requested=stop_requested,
             )
 

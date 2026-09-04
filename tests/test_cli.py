@@ -20,6 +20,23 @@ from argus.voice import NoSpeechDetected
 
 
 class SessionKeyTests(unittest.TestCase):
+    def test_uses_universal_environment_key_first(self) -> None:
+        with (
+            patch.dict(
+                "os.environ",
+                {
+                    "ARGUS_API_KEY": "universal-key",
+                    "GROQ_API_KEY": "legacy-key",
+                },
+                clear=True,
+            ),
+            patch("argus.cli.getpass.getpass") as prompt,
+        ):
+            key = _session_api_key("groq")
+
+        self.assertEqual(key, "universal-key")
+        prompt.assert_not_called()
+
     def test_uses_environment_key_without_prompting(self) -> None:
         with (
             patch.dict("os.environ", {"GROQ_API_KEY": "environment-key"}, clear=True),
@@ -40,11 +57,14 @@ class SessionKeyTests(unittest.TestCase):
 
         self.assertEqual(key, "prompted-key")
 
-    def test_other_providers_do_not_request_groq_key(self) -> None:
-        with patch("argus.cli.getpass.getpass") as prompt:
-            key = _session_api_key("future-provider")
+    def test_uses_configured_environment_name_for_compatible_provider(self) -> None:
+        with (
+            patch.dict("os.environ", {"COMPANY_API_KEY": "company-key"}, clear=True),
+            patch("argus.cli.getpass.getpass") as prompt,
+        ):
+            key = _session_api_key("openai_compatible", "COMPANY_API_KEY")
 
-        self.assertIsNone(key)
+        self.assertEqual(key, "company-key")
         prompt.assert_not_called()
 
     def test_confirmation_accepts_only_full_yes(self) -> None:

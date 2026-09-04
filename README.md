@@ -1,6 +1,6 @@
 # Argus
 
-Argus is a free-first, modular personal AI assistant. The current 0.14 release
+Argus is a free-first, modular personal AI assistant. The current 0.15 release
 uses a standalone local Control Center with an original dark red cinematic HUD,
 on-demand tools, explicit voice turns, and a two-minute idle lock.
 
@@ -20,6 +20,8 @@ The full direction and non-negotiable approval rules are in
 - Hands-free command capture that stops after speech followed by silence
 - Groq Whisper command transcription using the existing API credential
 - Local Windows text-to-speech with preferred male-voice selection
+- One generic `ARGUS_API_KEY` input for every configured chat provider
+- Groq, OpenAI, and explicit OpenAI-compatible Chat Completions adapters
 - Provider-independent AI, speech, wake, and tool interfaces
 - Provider-independent simulated and serial robotics/IoT device interfaces
 - Allowlisted sensor telemetry, confirmed actuator writes, and emergency stop
@@ -47,7 +49,7 @@ execution, or general file deletion.
 ## Technology
 
 - Python 3.11+
-- Groq and `openai/gpt-oss-120b` for chat
+- Configurable Groq, OpenAI, or OpenAI-compatible service for chat
 - Groq `whisper-large-v3-turbo` for command transcription
 - `sounddevice` for in-memory microphone capture
 - `pyttsx3` and Windows SAPI for local speech output
@@ -106,7 +108,8 @@ Windows still need a configured alias.
 
 ## Set up
 
-Create a Groq API key at <https://console.groq.com/keys>.
+Create an API key with your chosen model provider. Argus never stores a key in
+the repository or selects a company by inspecting the key's prefix.
 
 From PowerShell in this directory:
 
@@ -134,15 +137,76 @@ requires no vision-library network activity.
 .\.venv\Scripts\python.exe -m argus
 ```
 
-If `GROQ_API_KEY` is not set, Argus asks for it with hidden input. To avoid
-entering it on every launch, add `GROQ_API_KEY` under Windows **User environment
-variables**, then restart VS Code. Never put the key in `config/argus.json`.
+If `ARGUS_API_KEY` is not set, Argus asks for the configured provider's key with
+hidden input. To avoid entering it on every launch, set it once in PowerShell:
+
+```powershell
+setx ARGUS_API_KEY "paste-your-provider-key-here"
+```
+
+Restart VS Code after running `setx`. Never put a key in `config/argus.json` or
+commit one to Git. Existing `GROQ_API_KEY` and `OPENAI_API_KEY` variables remain
+supported for their matching providers.
+
+## Chat providers and the generic key
+
+No single credential can authenticate with every company; each company issues
+and validates its own keys. Argus provides the useful equivalent: one local
+`ARGUS_API_KEY` input and a provider-independent interface. The key is sent only
+to the provider explicitly selected in `config/argus.json`.
+
+The default remains Groq:
+
+```json
+"ai": {
+  "provider": "groq",
+  "model": "openai/gpt-oss-120b",
+  "api_key_env": "ARGUS_API_KEY",
+  "temperature": 0.3,
+  "max_completion_tokens": 1024
+}
+```
+
+For OpenAI, change `provider` and `model`; the official endpoint is selected
+automatically:
+
+```json
+"ai": {
+  "provider": "openai",
+  "model": "gpt-5-mini",
+  "api_key_env": "ARGUS_API_KEY",
+  "temperature": 0.3,
+  "max_completion_tokens": 1024
+}
+```
+
+For another company that documents an OpenAI-compatible Chat Completions API,
+configure its exact public HTTPS base URL and model name:
+
+```json
+"ai": {
+  "provider": "openai_compatible",
+  "model": "company-model-name",
+  "base_url": "https://api.company.example/v1",
+  "api_key_env": "ARGUS_API_KEY",
+  "temperature": 0.3,
+  "max_completion_tokens": 1024
+}
+```
+
+Providers with a different native protocol still need a dedicated Argus
+adapter. Argus deliberately does not guess a provider from a key prefix. Custom
+base URLs must use public HTTPS on the standard port; localhost, private IPs,
+embedded credentials, queries, and fragments are rejected.
+
+Voice transcription remains a separate Groq service. When chat uses OpenAI or
+another compatible provider and voice is enabled, set `GROQ_API_KEY` as well.
 
 ## Local Control Center
 
 The Tier 9 remote text endpoint has been retired. The Control Center connects
 directly to the local, allowlisted Argus tool runtime and requires only the
-existing `GROQ_API_KEY`:
+configured chat key:
 
 ```powershell
 .\.venv\Scripts\python.exe -m argus.dashboard --check

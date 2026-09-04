@@ -10,7 +10,7 @@ import sys
 from collections.abc import Mapping
 from typing import Any
 
-from argus.ai.factory import create_provider
+from argus.ai.factory import credential_environment_names, create_provider
 from argus.ai.provider import ProviderError
 from argus.commands import CommandResult, CommandRouter, DeviceActionRequest
 from argus.config import ConfigError, load_config
@@ -47,16 +47,20 @@ from argus.vision import (
 )
 
 
-def _session_api_key(provider_name: str) -> str | None:
-    if provider_name.casefold() != "groq":
-        return None
-    existing = os.environ.get("GROQ_API_KEY")
-    if existing and existing.strip():
-        return existing.strip()
+def _session_api_key(
+    provider_name: str,
+    api_key_env: str = "ARGUS_API_KEY",
+) -> str | None:
+    for name in credential_environment_names(provider_name, api_key_env):
+        existing = os.environ.get(name)
+        if existing and existing.strip():
+            return existing.strip()
 
-    print("GROQ_API_KEY is not set.")
+    print(f"{api_key_env} is not set for the {provider_name} chat provider.")
     try:
-        key = getpass.getpass("Paste your Groq API key for this session (hidden): ")
+        key = getpass.getpass(
+            f"Paste your {provider_name} API key for this session (hidden): "
+        )
     except (EOFError, KeyboardInterrupt):
         print()
         return None
@@ -300,7 +304,10 @@ def _run_wake_mode(
 def main() -> int:
     try:
         config = load_config()
-        api_key = _session_api_key(config.ai.provider)
+        api_key = _session_api_key(
+            config.ai.provider,
+            config.ai.api_key_env,
+        )
         provider = create_provider(
             config.ai,
             api_key=api_key,
@@ -376,10 +383,13 @@ def main() -> int:
     wake_setup_error = None
     if config.voice.enabled:
         try:
+            speech_api_key = os.environ.get("GROQ_API_KEY")
+            if not speech_api_key and config.ai.provider.casefold() == "groq":
+                speech_api_key = api_key
             voice_services = create_voice_services(
                 config.voice,
                 config.wake,
-                api_key=api_key,
+                api_key=speech_api_key,
             )
             voice_session = voice_services.push_to_talk
             wake_session = voice_services.wake_mode

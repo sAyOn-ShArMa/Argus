@@ -29,6 +29,8 @@ class AIConfig:
     model: str
     temperature: float
     max_completion_tokens: int
+    api_key_env: str = "ARGUS_API_KEY"
+    base_url: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -250,6 +252,42 @@ def _validate_configured_public_url(url: str, alias: str) -> str:
         raise ConfigError(
             f"Web application '{alias}' cannot target a private or local address."
         )
+    return normalized
+
+
+def _validate_ai_base_url(url: str) -> str:
+    normalized = url.strip().rstrip("/")
+    try:
+        parsed = urlsplit(normalized)
+        port = parsed.port
+    except ValueError as exc:
+        raise ConfigError("'ai.base_url' is not a valid URL.") from exc
+
+    hostname = parsed.hostname
+    if (
+        parsed.scheme != "https"
+        or not parsed.netloc
+        or not hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or port not in {None, 443}
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ConfigError(
+            "'ai.base_url' must be a public HTTPS URL without credentials, "
+            "a custom port, query, or fragment."
+        )
+
+    host = hostname.rstrip(".").casefold()
+    if host == "localhost" or host.endswith(".localhost"):
+        raise ConfigError("'ai.base_url' cannot target localhost.")
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        address = None
+    if address is not None and not address.is_global:
+        raise ConfigError("'ai.base_url' cannot target a private or local address.")
     return normalized
 
 
@@ -1187,6 +1225,39 @@ def load_config(path: str | Path | None = None) -> AppConfig:
     if server_config.enabled and not memory_config.enabled:
         raise ConfigError("Server mode requires 'memory.enabled' to be true.")
 
+    provider_name = _required_text(ai_raw, "provider", "ai").casefold()
+    supported_providers = {"groq", "openai", "openai_compatible"}
+    if provider_name not in supported_providers:
+        supported = ", ".join(sorted(supported_providers))
+        raise ConfigError(
+            f"Unsupported AI provider '{provider_name}'. Supported providers: {supported}."
+        )
+
+    api_key_env = ai_raw.get("api_key_env", "ARGUS_API_KEY")
+    if not isinstance(api_key_env, str) or not re.fullmatch(
+        r"[A-Z][A-Z0-9_]{1,63}", api_key_env.strip()
+    ):
+        raise ConfigError(
+            "'ai.api_key_env' must be an uppercase environment-variable name."
+        )
+    api_key_env = api_key_env.strip()
+
+    base_url_raw = ai_raw.get("base_url")
+    base_url = None
+    if base_url_raw is not None:
+        if not isinstance(base_url_raw, str) or not base_url_raw.strip():
+            raise ConfigError("'ai.base_url' must be a public HTTPS URL or null.")
+        base_url = _validate_ai_base_url(base_url_raw)
+    if provider_name == "openai_compatible" and base_url is None:
+        raise ConfigError(
+            "The openai_compatible provider requires an explicit 'ai.base_url'."
+        )
+    if provider_name in {"groq", "openai"} and base_url is not None:
+        raise ConfigError(
+            f"The {provider_name} provider uses its fixed official endpoint and "
+            "does not accept 'ai.base_url'."
+        )
+
     temperature = ai_raw.get("temperature")
     if not isinstance(temperature, (int, float)) or isinstance(temperature, bool):
         raise ConfigError("'ai.temperature' must be a number between 0 and 2.")
@@ -1204,10 +1275,12 @@ def load_config(path: str | Path | None = None) -> AppConfig:
             purpose=_required_text(assistant_raw, "purpose", "assistant"),
         ),
         ai=AIConfig(
-            provider=_required_text(ai_raw, "provider", "ai"),
+            provider=provider_name,
             model=_required_text(ai_raw, "model", "ai"),
             temperature=temperature,
             max_completion_tokens=max_tokens,
+            api_key_env=api_key_env,
+            base_url=base_url,
         ),
         source=config_path,
         tools=_load_tools(raw.get("tools"), config_path),

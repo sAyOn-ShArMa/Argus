@@ -1,6 +1,6 @@
 """Argus personal AI assistant core."""
 
-__version__ = "0.14.0"
+__version__ = "0.15.0"
 
 from argus.config import AppConfig, ConfigError, load_config
 from argus.core import Agent, AgentUnavailable

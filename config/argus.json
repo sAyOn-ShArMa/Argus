@@ -6,6 +6,7 @@
   "ai": {
     "provider": "groq",
     "model": "openai/gpt-oss-120b",
+    "api_key_env": "ARGUS_API_KEY",
     "temperature": 0.3,
     "max_completion_tokens": 1024
   },

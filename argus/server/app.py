@@ -6,7 +6,6 @@ import argparse
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
-import os
 from pathlib import Path
 import socket
 import ssl
@@ -14,6 +13,7 @@ import sys
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
+from argus.ai.factory import resolve_api_key
 from argus.ai.provider import ProviderError
 from argus.config import AppConfig, ConfigError, ServerConfig, load_config
 from argus.core import AgentUnavailable
@@ -310,7 +310,7 @@ def main(argv: list[str] | None = None) -> int:
         authenticator = TokenAuthenticator(config.server.clients)
         service = ServerService(
             config,
-            api_key=os.environ.get("GROQ_API_KEY"),
+            api_key=resolve_api_key(config.ai),
             notification_sink=_server_notification,
         )
         if arguments.check:

@@ -36,6 +36,59 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.assistant.name, "Argus")
         self.assertEqual(config.ai.provider, "groq")
         self.assertEqual(config.ai.temperature, 0.3)
+        self.assertEqual(config.ai.api_key_env, "ARGUS_API_KEY")
+        self.assertIsNone(config.ai.base_url)
+
+    def test_loads_openai_compatible_provider_configuration(self) -> None:
+        data = json.loads(json.dumps(VALID_CONFIG))
+        data["ai"].update(
+            {
+                "provider": "openai_compatible",
+                "model": "company-model",
+                "api_key_env": "COMPANY_API_KEY",
+                "base_url": "https://api.company.example/v1/",
+            }
+        )
+
+        config = load_config(self.write_config(data))
+
+        self.assertEqual(config.ai.provider, "openai_compatible")
+        self.assertEqual(config.ai.api_key_env, "COMPANY_API_KEY")
+        self.assertEqual(config.ai.base_url, "https://api.company.example/v1")
+
+    def test_compatible_provider_requires_explicit_base_url(self) -> None:
+        data = json.loads(json.dumps(VALID_CONFIG))
+        data["ai"]["provider"] = "openai_compatible"
+
+        with self.assertRaisesRegex(ConfigError, "requires an explicit"):
+            load_config(self.write_config(data))
+
+    def test_named_provider_rejects_a_custom_endpoint(self) -> None:
+        data = json.loads(json.dumps(VALID_CONFIG))
+        data["ai"].update(
+            {"provider": "openai", "base_url": "https://api.company.example/v1"}
+        )
+
+        with self.assertRaisesRegex(ConfigError, "fixed official endpoint"):
+            load_config(self.write_config(data))
+
+    def test_rejects_private_or_insecure_ai_base_url(self) -> None:
+        for url in ("http://api.example.com/v1", "https://127.0.0.1/v1"):
+            with self.subTest(url=url):
+                data = json.loads(json.dumps(VALID_CONFIG))
+                data["ai"].update(
+                    {"provider": "openai_compatible", "base_url": url}
+                )
+
+                with self.assertRaisesRegex(ConfigError, "ai.base_url"):
+                    load_config(self.write_config(data))
+
+    def test_rejects_invalid_api_key_environment_name(self) -> None:
+        data = json.loads(json.dumps(VALID_CONFIG))
+        data["ai"]["api_key_env"] = "bad-name"
+
+        with self.assertRaisesRegex(ConfigError, "environment-variable"):
+            load_config(self.write_config(data))
 
     def test_rejects_missing_section(self) -> None:
         with self.assertRaisesRegex(ConfigError, "'ai'"):
